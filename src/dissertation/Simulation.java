@@ -25,6 +25,7 @@ import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 
 public class Simulation {
+	
 	private static FrameBuffer buffer;
 	public int maxSubSteps;
 	public float timeStep, fixedTimeStep;
@@ -32,20 +33,17 @@ public class Simulation {
 	private static Object3D plane, dome;
 	public static float scale = 1;
 	public static int numBoxes = 10;
-	private static int mass = 1;
 	public static boolean growing = false;
 	protected static Clock clock = new Clock(); 
-	
+	private static List<Bacteria> bacteriaList = new ArrayList<Bacteria>();
 	static boolean forward = false;
  	static boolean backward = false;
 	static boolean up = false;
 	static boolean down = false;
 	static boolean left = false;
 	static boolean right = false;
-	private static float xAngle = 0;
-	private static MouseMapper mouseMapper = null;
-	private static boolean doLoop = true;
 	static Ticker ticker = new Ticker(15);
+
 	public static void main(String[] args) {
 		
 		/* Settings */
@@ -121,44 +119,39 @@ public class Simulation {
 		plane.compileAndStrip();
 		dome.compileAndStrip();
 		KeyMapper keyMapper = new KeyMapper();
-		Bacteria bacteriaHelper = new Bacteria();		
-		bacteriaHelper.getBacteriaPhysics(dynamicsWorld);
-		bacteriaHelper.getBacteriaGraphics(world);
-		bacteriaHelper.getBacteriaPhysics(dynamicsWorld);
-		bacteriaHelper.getBacteriaGraphics(world);
+		Bacteria bacteria = new Bacteria(dynamicsWorld, world);
+		Bacteria bacteria1 = new Bacteria(dynamicsWorld, world);
+//		bacteria.getObject3D().addChild(bacteria1.getObject3D());
+		bacteria1.getRigidBody().translate(new Vector3f(40,0,0));
+		
 		while (!org.lwjgl.opengl.Display.isCloseRequested()) { 
 			long ticks = 0;
 			SimpleVector offset = new SimpleVector(1, 0, -1).normalize();
-			if(doLoop) { 
-				ticks = ticker.getTicks();
-				if (ticks > 0) {
-					offset.rotateY(0.007f * ticks);
-					pollControls(keyMapper);
-					move(ticks);
-				}
+			ticks = ticker.getTicks();
+			if (ticks > 0) {
+				offset.rotateY(0.007f * ticks);
+				pollControls(keyMapper);
+				move(ticks);
 			}
-			for (Object3D bacteria : bacteriaHelper.getBacteriaList()) {
-				bacteria.rotateZ((float) (Math.PI / 2f));
-				bacteria.setTexture("bacteria");
-				bacteria.getMesh();
-				
-				bacteriaHelper.setScale(scale);
-				if (bacteriaHelper.getScale() <= 1.0015621) {
-					VertexController vertexController = new VertexController(bacteria);
+			
+			for (Bacteria bac : Simulation.getBacteriaList()) {
+				Object3D bac3D = bac.getObject3D();
+				RigidBody bacRig = bac.getRigidBody();
+				bac3D.setTexture("bacteria");
+				bac3D.getMesh();
+				bac3D.setScale(scale);
+				bac.setMotionState(bac);
+				if (bac3D.getScale() <= 1.0015621) {
+					VertexController vertexController = new VertexController(bac3D);
 					vertexController.scale(new SimpleVector(1f,scale,1f));
-					System.out.println("SCALE IS HERE :" + bacteriaHelper.getScale());
+					bacRig.getCollisionShape().setLocalScaling(new Vector3f(1f, scale, 1f));
+					System.out.println("SCALE IS HERE :" + bac3D.getScale());
 				}else
 					growing = false;
 			}
 			float ms = clock.getTimeMicroseconds();
 			clock.reset();
 			dynamicsWorld.stepSimulation(ms / 1000000f);
-			for (RigidBody rigidBody : bacteriaHelper.getRigidBodyList()) {
-				bacteriaHelper.setMotionState(rigidBody);
-				if (growing) {
-					rigidBody.getCollisionShape().setLocalScaling(new Vector3f(1f, scale, 1f)); //scale the RigidBody		
-				}
-			}
 			scale = scale + 0.000005f;
 			buffer.clear();
 			world.renderScene(buffer);
@@ -169,7 +162,7 @@ public class Simulation {
 		buffer.disableRenderer(IRenderer.RENDERER_OPENGL);
 		buffer.dispose();
 		System.exit(0);
-		}
+	}
 
 	private static void move(long ticks) {
 
@@ -240,10 +233,7 @@ public class Simulation {
 	public static void pollControls(KeyMapper k) {
 		KeyState ks = null;
 		while ((ks = k.poll()) != KeyState.NONE) {
-			if (ks.getKeyCode() == KeyEvent.VK_ESCAPE) {
-				doLoop = false;
-			}
-
+	
 			if (ks.getKeyCode() == KeyEvent.VK_UP) {
 				forward = ks.getState();
 			}
@@ -268,9 +258,12 @@ public class Simulation {
 				down = ks.getState();
 			}
 		}
+	}
+	public static List<Bacteria> getBacteriaList() {
+		return bacteriaList;
+	}
 
-		if (org.lwjgl.opengl.Display.isCloseRequested()) {
-			doLoop = false;
-		}
+	public static void setBacteriaList(List<Bacteria> bacteriaList) {
+		Simulation.bacteriaList = bacteriaList;
 	}
 }
