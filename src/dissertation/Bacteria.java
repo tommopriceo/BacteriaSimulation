@@ -5,6 +5,7 @@ import javax.vecmath.Quat4f;
 import javax.vecmath.Vector3f;
 
 import com.bulletphysics.collision.shapes.CapsuleShape;
+import com.bulletphysics.collision.shapes.CapsuleShapeX;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.dynamics.DiscreteDynamicsWorld;
 import com.bulletphysics.dynamics.RigidBody;
@@ -13,6 +14,7 @@ import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 import com.threed.jpct.Object3D;
 import com.threed.jpct.Primitives;
+import com.threed.jpct.SimpleVector;
 import com.threed.jpct.World;
 
 public class Bacteria {
@@ -25,27 +27,28 @@ public class Bacteria {
 	public Bacteria(DiscreteDynamicsWorld dynamicsWorld,World world) {
 		initObject3D(world);
 		initRigidBody(dynamicsWorld);
-		Simulation.getBacteriaList().add(this);
+		Simulation.getBacteriaList().listIterator().add(this);
+//		this.setMotionState(this);
 	}
 
 	public void initRigidBody(DiscreteDynamicsWorld dynamicsWorld ) {
 		/* setup the Physics side */
-		CollisionShape bacteriaShape = new CapsuleShape(6,3);
-		DefaultMotionState fallMotionState = new DefaultMotionState(new Transform(new Matrix4f(new Quat4f(0, 0, 0, 1), new Vector3f(0, 8, 1), 1.0f)));
+		CollisionShape bacteriaShape = new CapsuleShape(7,2);
+		DefaultMotionState fallMotionState = new DefaultMotionState(new Transform(new Matrix4f(new Quat4f(0, 0, 0, 1), new Vector3f(0, 10, 1), 1.0f)));
 		Vector3f fallInertia = new Vector3f(0,0,0); 
-		bacteriaShape.calculateLocalInertia(10000,fallInertia);  
+		bacteriaShape.calculateLocalInertia(1,fallInertia);  
 		RigidBodyConstructionInfo fallRigidBodyCI = new RigidBodyConstructionInfo(mass,fallMotionState,bacteriaShape,fallInertia); 
 		rigidBody = new RigidBody(fallRigidBodyCI);
 		dynamicsWorld.addRigidBody(rigidBody); //adds to the physics simulation		
 	}
 
 	public void initObject3D(World world) {
-		object3D = Primitives.getEllipsoid(6, 3);
+		object3D = Primitives.getEllipsoid(7, 2);
 		object3D.setEnvmapped(Object3D.ENVMAP_ENABLED);
 		object3D.setCollisionMode(Object3D.COLLISION_CHECK_SELF);
 		object3D.setTexture("bacteria");
 		world.addObject(object3D);
-		object3D.build();	
+		object3D.build();	//builds the mesh for the object 
 	}
 	
 	public void setMotionState(Bacteria bacteria) {
@@ -54,7 +57,7 @@ public class Bacteria {
 		bacteria.getRigidBody().getMotionState().getWorldTransform(trans);  
 		msj = new JPCTMotionState(bacteria.getObject3D(), trans);
 		bacteria.getObject3D().rotateZ((float) (Math.PI / 2f));
-		System.out.println("bacteria height: " + trans.origin.y); 
+//		System.out.println("bacteria height: " + trans.origin.y); 
 	}
 
 	public float getScale() {
