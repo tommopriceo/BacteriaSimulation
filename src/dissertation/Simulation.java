@@ -32,6 +32,7 @@ public class Simulation {
 	private static World world, sky;
 	private static Object3D plane, dome;
 	public static float scale = 1;
+	public static double maxScale = 1.0031800;
 	public static int numBoxes = 10;
 	public static boolean growing = false;
 	protected static Clock clock = new Clock(); 
@@ -47,14 +48,14 @@ public class Simulation {
 	public static void main(String[] args) {
 		
 		/* Settings */
-		Config.glAvoidTextureCopies = true;
-		Config.maxPolysVisible = 10000;
+//		Config.glAvoidTextureCopies = true;
+		Config.maxPolysVisible = 100000;
 		Config.glColorDepth = 24;
 		Config.glFullscreen = false;
 		Config.farPlane = 4000;
 		Config.glShadowZBias = 0.8f;
 		Config.lightMul = 1;
-		Config.collideOffset = 5000;
+		Config.collideOffset = 0;
 		Config.glTrilinear = true;
 		
 		/*Textures*/
@@ -86,29 +87,26 @@ public class Simulation {
 		buffer = new FrameBuffer(800, 600, FrameBuffer.SAMPLINGMODE_NORMAL);
 		buffer.disableRenderer(IRenderer.RENDERER_SOFTWARE);
 		buffer.enableRenderer(IRenderer.RENDERER_OPENGL);
-  
+		
 		/* Create Visual world */
 		world = new World();
-		sky = new World();
-		world.setAmbientLight(150, 150, 150);
+		world.setAmbientLight(255, 255, 255);
+		
+		
 		
 		/*Create Objects*/
-		plane = Primitives.getPlane(20, 30); //Sets the size of the floor
+		plane = Primitives.getPlane(100, 100); //Sets the size of the floor
 		plane.rotateX((float) (Math.PI / 2f));  //Sets the orientation  
 		plane.setTexture("plane");
 		plane.setCollisionMode(Object3D.COLLISION_CHECK_OTHERS); // other objects may collide with this object
 //		plane.setSpecularLighting(true); //This sets 3D lighting affects 
 //		plane.setEnvmapped(Object3D.ENVMAP_ENABLED);   //This handles reflections and what not
 		
-		dome = Primitives.getPlane(20, 30); //Sets the size of the sky
-		dome.rotateX((float) (Math.PI / 2f));
-		dome.setTexture("sky");
 
 		/* Add the objects into the world */
-		sky.addObject(dome);
 		world.addObject(plane);  //adds the floor to the 
 		world.buildAllObjects();
-		sky.buildAllObjects();
+
 
 		Camera cam = world.getCamera();
 		cam.moveCamera(Camera.CAMERA_MOVEOUT, 90);
@@ -117,12 +115,14 @@ public class Simulation {
 		cam.setFOV(1.5f);
 
 		plane.compileAndStrip();
-		dome.compileAndStrip();
 		KeyMapper keyMapper = new KeyMapper();
 		Bacteria bacteria = new Bacteria(dynamicsWorld, world);
-		Bacteria bacteria1 = new Bacteria(dynamicsWorld, world);
-//		bacteria.getObject3D().addChild(bacteria1.getObject3D());
-		bacteria1.getRigidBody().translate(new Vector3f(40,0,0));
+		new Bacteria(dynamicsWorld, world).getRigidBody().translate(new Vector3f(40,0,10));
+//		bacteria1.getRigidBody().translate(new Vector3f(40,0,10));
+//		Bacteria bacteria1 = new Bacteria(dynamicsWorld, world);
+
+	
+//		bacteria1.getRigidBody().translate(new Vector3f(50,0,0));
 		
 		while (!org.lwjgl.opengl.Display.isCloseRequested()) { 
 			long ticks = 0;
@@ -133,26 +133,34 @@ public class Simulation {
 				pollControls(keyMapper);
 				move(ticks);
 			}
-			
-			for (Bacteria bac : Simulation.getBacteriaList()) {
+			for (Bacteria bac : new ArrayList<Bacteria>(Simulation.getBacteriaList())) {
 				Object3D bac3D = bac.getObject3D();
 				RigidBody bacRig = bac.getRigidBody();
-				bac3D.setTexture("bacteria");
-				bac3D.getMesh();
-				bac3D.setScale(scale);
-				bac.setMotionState(bac);
-				if (bac3D.getScale() <= 1.0015621) {
+				if (bac.getScale() <= maxScale) {
 					VertexController vertexController = new VertexController(bac3D);
 					vertexController.scale(new SimpleVector(1f,scale,1f));
 					bacRig.getCollisionShape().setLocalScaling(new Vector3f(1f, scale, 1f));
-					System.out.println("SCALE IS HERE :" + bac3D.getScale());
-				}else
-					growing = false;
+					bac.setScale(scale);
+				}else {
+					Transform position = new Transform(); 
+					bacRig.getWorldTransform(position);
+					System.out.println(position.getMatrix(new Matrix4f()));
+					world.removeObject(bac3D);
+					dynamicsWorld.removeRigidBody(bacRig);
+					Simulation.getBacteriaList().remove(bac);
+				    Bacteria b1 = new Bacteria(dynamicsWorld, world);
+				    Bacteria b2 = new Bacteria(dynamicsWorld, world);
+				    b1.getRigidBody().setWorldTransform(position);
+//				    System.out.println(position.toString());
+					scale = 1;
+				}
+				bac3D.rebuild();
+				bac.setMotionState(bac);
 			}
 			float ms = clock.getTimeMicroseconds();
 			clock.reset();
 			dynamicsWorld.stepSimulation(ms / 1000000f);
-			scale = scale + 0.000005f;
+			scale = scale + 0.000010f;
 			buffer.clear();
 			world.renderScene(buffer);
 			world.draw(buffer);
