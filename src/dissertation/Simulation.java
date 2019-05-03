@@ -3,6 +3,8 @@ package dissertation;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 import javax.vecmath.*;
 
@@ -13,6 +15,7 @@ import com.bulletphysics.collision.broadphase.BroadphaseInterface;
 import com.bulletphysics.collision.broadphase.DbvtBroadphase;
 import com.bulletphysics.collision.dispatch.CollisionDispatcher;
 import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
+import com.bulletphysics.collision.shapes.BoxShape;
 import com.bulletphysics.collision.shapes.CapsuleShape;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.StaticPlaneShape;
@@ -24,46 +27,62 @@ import com.bulletphysics.linearmath.Clock;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 
-public class Simulation {
-	private static FrameBuffer buffer;
-	public int maxSubSteps;
-	public float timeStep, fixedTimeStep;
-	private static World world, sky;
-	private static Object3D plane, dome;
-	public static float scale = 1;
-	public static int numBoxes = 10;
-	private static int mass = 1;
-	public static boolean growing = false;
-	protected static Clock clock = new Clock(); 
+public class Simulation  {
 	
-	static boolean forward = false;
- 	static boolean backward = false;
-	static boolean up = false;
-	static boolean down = false;
-	static boolean left = false;
-	static boolean right = false;
-	private static float xAngle = 0;
-	private static MouseMapper mouseMapper = null;
-	private static boolean doLoop = true;
-	static Ticker ticker = new Ticker(15);
+	private static FrameBuffer buffer;
+	private static World world;
+	private static Object3D plane;
+	private static float scale = 1;
+	protected static Clock clock = new Clock(); 
+	private static List<Bacteria> bacteriaList = new ArrayList<Bacteria>();
+	private static boolean forward = false;
+	private static boolean backward = false;
+	private static boolean up = false;
+	private static boolean down = false;
+	private static boolean left = false;
+	private static boolean right = false;
+	private static Ticker ticker = new Ticker(15);
+	
+	/* Video Settings */
+	private static int windowX = 800;
+	private static int windowY = 600;
+	private static Float camFOV = 5.5f;
+	
+	/* Scaling Probability */
+	private static int max = 100;
+	private static int min = 1;
+	private static int threshold = 50;
+	private static double maxScale = 1.0021000;
+
+	/* World Settings */
+	private static Vector3f gravity =  new Vector3f(0f,-20.8f,0f); //X,Y,Z
+	private static Float stepTime = 0.01666f; //60hz
+	private static Float floorFriction = 5f;
+	private static int floorX = 20;
+	private static int floorY = 30;
+	
 	public static void main(String[] args) {
 		
-		/* Settings */
+		/* Renderer Settings */
 		Config.glAvoidTextureCopies = true;
-		Config.maxPolysVisible = 10000;
+		Config.maxPolysVisible = 500000;
 		Config.glColorDepth = 24;
 		Config.glFullscreen = false;
 		Config.farPlane = 4000;
 		Config.glShadowZBias = 0.8f;
 		Config.lightMul = 1;
-		Config.collideOffset = 5000;
-		Config.glTrilinear = true;
+		Config.collideOffset = 500;
+		
+		/* Buffer Settings */
+		buffer = new FrameBuffer(windowX, windowY, FrameBuffer.SAMPLINGMODE_GL_AA_4X);
+		buffer.disableRenderer(IRenderer.RENDERER_SOFTWARE);
+		buffer.enableRenderer(IRenderer.RENDERER_OPENGL);
 		
 		/*Textures*/
 		TextureManager tm = TextureManager.getInstance();
-		tm.addTexture("sky", new Texture("/Users/yungtommo/eclipse-workspace/dissertation/src/dissertation/textures/sky.jpg"));
-		tm.addTexture("bacteria", new Texture("/Users/yungtommo/eclipse-workspace/dissertation/src/dissertation/textures/bacteria.jpg"));
-		tm.addTexture("plane", new Texture("/Users/yungtommo/eclipse-workspace/dissertation/src/dissertation/textures/floor.jpg"));
+		tm.addTexture("bacteria", new Texture("./src/dissertation/textures/bacteria.jpg"));
+		tm.addTexture("plane", new Texture("./src/dissertation/textures/whitesmall.jpg"));
+		tm.addTexture("box", new Texture("./src/dissertation/textures/floor.jpg"));
 		
 		/* Create the physical world using JBullet*/
 		BroadphaseInterface broadphase = new DbvtBroadphase();
@@ -73,105 +92,101 @@ public class Simulation {
 		DiscreteDynamicsWorld dynamicsWorld = new DiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
 		
 		/* set the gravity of world*/
-		dynamicsWorld.setGravity(new Vector3f(0, -10, 0));
+		dynamicsWorld.setGravity(gravity);
 
 		/* setup collision shapes */
-		CollisionShape groundShape = new StaticPlaneShape(new Vector3f(0, 1, 0), 1);
-	
-		/* setup ground motion state */
+		CollisionShape groundShape = new StaticPlaneShape(new Vector3f(0,1, 0), 1);
+		/* setup ground physics */
 		DefaultMotionState groundMotionState = new DefaultMotionState(new Transform(new Matrix4f(new Quat4f(0, 0, 0, 1), new Vector3f(0, -1, 0), 1.0f))); 
 		RigidBodyConstructionInfo groundRigidBodyCI = new RigidBodyConstructionInfo(0, groundMotionState, groundShape, new Vector3f(0,0,0)); 
 		RigidBody groundRigidBody = new RigidBody(groundRigidBodyCI); 
+		groundRigidBody.setFriction(floorFriction);
 		dynamicsWorld.addRigidBody(groundRigidBody); // add ground 
 
-		/* Create FrameBuffer to display */
-		buffer = new FrameBuffer(800, 600, FrameBuffer.SAMPLINGMODE_NORMAL);
-		buffer.disableRenderer(IRenderer.RENDERER_SOFTWARE);
-		buffer.enableRenderer(IRenderer.RENDERER_OPENGL);
-  
 		/* Create Visual world */
 		world = new World();
-		sky = new World();
-		world.setAmbientLight(150, 150, 150);
+		world.setAmbientLight(255, 255, 255);
 		
 		/*Create Objects*/
-		plane = Primitives.getPlane(20, 30); //Sets the size of the floor
+		plane = Primitives.getPlane(floorX, floorY); //Sets the size of the floor
 		plane.rotateX((float) (Math.PI / 2f));  //Sets the orientation  
 		plane.setTexture("plane");
 		plane.setCollisionMode(Object3D.COLLISION_CHECK_OTHERS); // other objects may collide with this object
-//		plane.setSpecularLighting(true); //This sets 3D lighting affects 
-//		plane.setEnvmapped(Object3D.ENVMAP_ENABLED);   //This handles reflections and what not
 		
-		dome = Primitives.getPlane(20, 30); //Sets the size of the sky
-		dome.rotateX((float) (Math.PI / 2f));
-		dome.setTexture("sky");
-
 		/* Add the objects into the world */
-		sky.addObject(dome);
 		world.addObject(plane);  //adds the floor to the 
 		world.buildAllObjects();
-		sky.buildAllObjects();
-
+	
 		Camera cam = world.getCamera();
 		cam.moveCamera(Camera.CAMERA_MOVEOUT, 90);
-		cam.moveCamera(Camera.CAMERA_MOVEUP, 20);
+		cam.moveCamera(Camera.CAMERA_MOVEUP, 50);
 		cam.lookAt(plane.getTransformedCenter());
-		cam.setFOV(1.5f);
-
-		plane.compileAndStrip();
-		dome.compileAndStrip();
+		cam.setFOV(camFOV);
+		
 		KeyMapper keyMapper = new KeyMapper();
-		Bacteria bacteriaHelper = new Bacteria();		
-		bacteriaHelper.getBacteriaPhysics(dynamicsWorld);
-		bacteriaHelper.getBacteriaGraphics(world);
-		bacteriaHelper.getBacteriaPhysics(dynamicsWorld);
-		bacteriaHelper.getBacteriaGraphics(world);
+		Bacteria bacteria = new Bacteria(dynamicsWorld, world);
+		
 		while (!org.lwjgl.opengl.Display.isCloseRequested()) { 
 			long ticks = 0;
 			SimpleVector offset = new SimpleVector(1, 0, -1).normalize();
-			if(doLoop) { 
-				ticks = ticker.getTicks();
-				if (ticks > 0) {
-					offset.rotateY(0.007f * ticks);
-					pollControls(keyMapper);
-					move(ticks);
-				}
+			ticks = ticker.getTicks();
+			if (ticks > 0) {
+				offset.rotateY(0.007f * ticks);
+				pollControls(keyMapper);
+				move(ticks);
 			}
-			for (Object3D bacteria : bacteriaHelper.getBacteriaList()) {
-				bacteria.rotateZ((float) (Math.PI / 2f));
-				bacteria.setTexture("bacteria");
-				bacteria.getMesh();
+			for (Bacteria bac : new ArrayList<Bacteria>(Simulation.getBacteriaList())) {
+				Object3D bac3D = bac.getObject3D();
+				RigidBody bacRig = bac.getRigidBody();
+				Random rand = new Random();
+				int randomNum = rand.nextInt((max - min) + 1) + min;
+//				if (randomNum >= threshold) {
+					if (bac.getScale() <= maxScale) {
+						VertexController vertexController = new VertexController(bac3D);
+						vertexController.scale(new SimpleVector(1f,scale,1f));
+						bacRig.getCollisionShape().setLocalScaling(new Vector3f(1f, scale, 1f));
+						bac.setScale(scale);
+					}else {
+						
+						Transform position1 = new Transform(); 
+						Transform position2 = new Transform();
+						bacRig.getWorldTransform(position1);
+						bacRig.getWorldTransform(position2);
+						position1.getMatrix(new Matrix4f());
+						position2.getMatrix(new Matrix4f());
+						dynamicsWorld.removeRigidBody(bacRig);
+						world.removeObject(bac3D);
+						Simulation.getBacteriaList().remove(bac);
+					    Bacteria b1 = new Bacteria(dynamicsWorld, world);
+					    Bacteria b2 = new Bacteria(dynamicsWorld, world);
+					    b1.getRigidBody().setWorldTransform(position1);
+					    b2.getRigidBody().setWorldTransform(position2);
+					    b1.getRigidBody().translate(new Vector3f(-7f,0f,0f));
+					    b2.getRigidBody().translate(new Vector3f(7f,0f,0f));	 	
+					    scale = 1;
+					}
 				
-				bacteriaHelper.setScale(scale);
-				if (bacteriaHelper.getScale() <= 1.0015621) {
-					VertexController vertexController = new VertexController(bacteria);
-					vertexController.scale(new SimpleVector(1f,scale,1f));
-					System.out.println("SCALE IS HERE :" + bacteriaHelper.getScale());
-				}else
-					growing = false;
+				bac.setMotionState(bac);
+			
+//			}
 			}
-			float ms = clock.getTimeMicroseconds();
-			clock.reset();
-			dynamicsWorld.stepSimulation(ms / 1000000f);
-			for (RigidBody rigidBody : bacteriaHelper.getRigidBodyList()) {
-				bacteriaHelper.setMotionState(rigidBody);
-				if (growing) {
-					rigidBody.getCollisionShape().setLocalScaling(new Vector3f(1f, scale, 1f)); //scale the RigidBody		
-				}
-			}
-			scale = scale + 0.000005f;
+			dynamicsWorld.stepSimulation(stepTime);
+//			System.out.println(Simulation.getBacteriaList().size());  //Shows how many bacteria are in the world
+			scale = scale + 0.000004f;
 			buffer.clear();
 			world.renderScene(buffer);
 			world.draw(buffer);
 			buffer.update();
 			buffer.displayGLOnly();
+
 		}
 		buffer.disableRenderer(IRenderer.RENDERER_OPENGL);
 		buffer.dispose();
 		System.exit(0);
-		}
+	}
 
-	private static void move(long ticks) {
+	/*Basic control functions - taken from JPTC advanced example*/
+	private static void move(long ticks) { 
 
 		if (ticks == 0) {
 			return;
@@ -240,10 +255,7 @@ public class Simulation {
 	public static void pollControls(KeyMapper k) {
 		KeyState ks = null;
 		while ((ks = k.poll()) != KeyState.NONE) {
-			if (ks.getKeyCode() == KeyEvent.VK_ESCAPE) {
-				doLoop = false;
-			}
-
+	
 			if (ks.getKeyCode() == KeyEvent.VK_UP) {
 				forward = ks.getState();
 			}
@@ -268,9 +280,13 @@ public class Simulation {
 				down = ks.getState();
 			}
 		}
-
-		if (org.lwjgl.opengl.Display.isCloseRequested()) {
-			doLoop = false;
-		}
 	}
+	public static List<Bacteria> getBacteriaList() {
+		return bacteriaList;
+	}
+
+	public static void setBacteriaList(List<Bacteria> bacteriaList) {
+		Simulation.bacteriaList = bacteriaList;
+	}
+
 }

@@ -10,8 +10,7 @@ class VertexController extends GenericVertexController
        super.init(toCheck.getMesh(), true);
    }
 
-   protected void scale(SimpleVector scale) 
-   {
+   protected void scale(SimpleVector scale) {
       SimpleVector[] vertices = getSourceMesh();
       SimpleVector[] destination = getDestinationMesh();
 

@@ -43,8 +43,7 @@ public class JPCTMotionState extends MotionState{
     return worldTrans;
   }
   
-  public void setWorldTransform(Transform worldTrans)
-  {
+  public void setWorldTransform(Transform worldTrans){
     setGraphicFromTransform(worldTrans);
   }
   
